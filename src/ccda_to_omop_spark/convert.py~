@@ -1,0 +1,69 @@
+
+import logging
+import os
+import pandas as pd
+
+from pyspark import StorageLevel
+from pyspark.sql import SparkSession
+from ccda_to_omop import layer_datasets
+from ccda_to_omop import spark_dataframe_column_types
+from ccda_to_omop import ddl
+
+spark = SparkSession.builder.getOrCreate()
+
+logging.basicConfig(
+        format='%(levelname)s: %(filename)s %(lineno)d %(message)s',
+#        filename=f"logs/log_file_{base_name}.log",
+#        force=True,
+         #level=logging.ERROR
+         #level=logging.WARNING
+         level=logging.INFO
+        # level=logging.DEBUG
+)
+logger = logging.getLogger(__name__)
+
+
+def process_directory(directory_path):
+    omop_dataset_dict = {}
+    only_files = [f for f in os.listdir(directory_path) if os.path.isfile(os.path.join(directory_path, f))]
+    for file in (only_files):
+        if file.endswith(".xml"):
+            new_data_dict = layer_datasets.process_file(os.path.join(directory_path, file), False, True)
+            for key in new_data_dict:
+                if key in omop_dataset_dict and omop_dataset_dict[key] is not None:
+                    if new_data_dict[key] is  not None:
+                        omop_dataset_dict[key] = pd.concat([ omop_dataset_dict[key], new_data_dict[key] ])
+                else:
+                    omop_dataset_dict[key]= new_data_dict[key]
+                if new_data_dict[key] is not None:
+                    logger.info(f"{file} {key} {len(omop_dataset_dict)} {omop_dataset_dict[key].shape} {new_data_dict[key].shape}")
+                else:
+                    logger.info(f"{file} {key} {len(omop_dataset_dict)} None / no data")
+
+    return layer_datasets.combine_datasets(omop_dataset_dict)
+
+
+
+omop_dataset_dict = process_directory('/Users/croeder/git/CCDA-data/resources')
+
+for (omop_domain, pdf) in omop_dataset_dict.items():
+    print(f"\n{omop_domain}")
+
+    # debug type problems
+    if omop_domain == 'Visit':
+        print(f"SKIPPING {omop_domain}")
+        print(f"{omop_domain}  {pdf['admitting_source_concept_id']}")
+        print(f"{omop_domain} val {pdf['admitting_source_concept_id'].at[0]}")
+        print(f"{omop_domain} type() {type(pdf['admitting_source_concept_id'].at[0])}")
+        print(f"{omop_domain} dtype {pdf['admitting_source_concept_id'].dtype}")
+    elif omop_domain == 'Observation':
+        print(f"SKIPPING {omop_domain}")
+    else:
+        omop_tablename = ddl.domain_name_to_table_name[omop_domain]
+        pdf.to_csv(f"{omop_tablename}.csv")
+        sdf = spark.createDataFrame(pdf, spark_dataframe_column_types.spark_dataframe_column_types[omop_tablename])
+        sdf.show(5) 
+        ##sdf.persist(StorageLevel.MEMORY_AND_DISK_DESER)
+        sdf.write.parquet(f"{omop_domain}_parquet", mode='overwrite')
+        sdf.write.csv(f"{omop_domain}_spark_csv")
+
