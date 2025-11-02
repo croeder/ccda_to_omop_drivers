@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 #filepath="/Users/croeder/git/CCDA-data/resources/170.314b2_AmbulatoryToC.xml"
 #filepath="/Users/croeder/git/CCDA-data/resources/C-CDA_R2-1_CCD.xml"
 #filepath="/Users/croeder/git/CCDA-data/resources/Patient-502.xml"
+dir="/Users/croeder/git/CCDA-data/resources"
 filepath="/Users/croeder/git/CCDA-data/resources/CCDA_CCD_b1_InPatient_v2.xml"
 
 def process_file(directory_path):
@@ -33,14 +34,21 @@ def process_file(directory_path):
              else:
                  omop_dataset_dict[key]= new_data_dict[key]
          if new_data_dict[key] is not None:
-             logger.info(f"{file} {key} {len(omop_dataset_dict)} {omop_dataset_dict[key].shape} {new_data_dict[key].shape}")
+            if key in omop_dataset_dict:
+                logger.info(f"{filepath} {key} {len(omop_dataset_dict)} {omop_dataset_dict[key].shape} {new_data_dict[key].shape}")
+            else:
+                logger.info(f"{filepath} {key} {len(omop_dataset_dict)} {new_data_dict[key].shape}")
          else:
-              logger.info(f"{file} {key} {len(omop_dataset_dict)} None / no data")
+              logger.info(f"{filepath} {key} {len(omop_dataset_dict)} None / no data")
 
     return layer_datasets.combine_datasets(omop_dataset_dict)
 
+# straight-forward in plain python, but we want to flatmap the work over a cluster...
+# TBD
+def process_dir(dir):
+   1
 
-
+omop_dataset_dict = {}
 omop_dataset_dict = process_file(filepath)
 
 for (omop_domain, pdf) in omop_dataset_dict.items():
@@ -55,3 +63,4 @@ for (omop_domain, pdf) in omop_dataset_dict.items():
           spark_dataframe_column_types.spark_dataframe_column_types[omop_tablename])
         sdf.write.parquet(f"parquet/{omop_domain}_parquet", mode='overwrite')
 
+~/git/CCDA-data/xml_load_test
