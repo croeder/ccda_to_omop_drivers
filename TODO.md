@@ -1,11 +1,14 @@
 
+## 2025-11-09
+- Running in Spark, though not the cluster seems to run
+- As before, Need to see how to submit basic PySpark over the cluster.
+- Need to make a dataset of the files' strings so we can do the next step
+- Move to driving executing through flatMap from such a dataset by adapting this to ccda_to_omop. Start from the CCDA_OMOP_Spark_Transform's omop_eav_dict.py
 
 
 ## 2025-11-02
   - We know how to submit Calculate Pi over the cluster. It's Java code.
-
   - Need to see how to submit basic PySpark over the cluster.
-
   - Then adapt this to ccda_to_omop. Start from the CCDA_OMOP_Spark_Transform's omop_eav_dict.py
 
 ## 2025-10-25
