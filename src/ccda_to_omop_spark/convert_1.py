@@ -2,14 +2,16 @@
 import logging
 import os
 import pandas as pd
+import pathlib
 
 from pyspark import StorageLevel
 from pyspark.sql import SparkSession
 from ccda_to_omop import layer_datasets as LD
-from ccda_to_omop import spark_dataframe_column_types
+from ccda_to_omop import value_transformations as VT
+from ccda_to_omop import domain_dataframe_column_types
 from ccda_to_omop import ddl
-
-
+from ccda_to_omop.metadata import  get_meta_dict
+from ccda_to_omop.util import create_codemap_dict_from_csv
 
 spark = SparkSession.builder.getOrCreate()
 
@@ -27,15 +29,18 @@ dir="/Users/croeder/git/CCDA-data/resources"
 filepath="/Users/croeder/git/CCDA-data/resources/CCDA_CCD_b1_InPatient_v2.xml"
 filename="CCDA_CCD_b1_InPatient_v2.xml"
 
+home=pathlib.Path(__file__).parent.parent.parent.resolve()
+codemap_dict = create_codemap_dict_from_csv(f"{home}/resources/map.csv")
+VT.set_codemap_dict(codemap_dict)
 
 # this is a COPY of LD.process_dictory, only that one doesn't return the datasest!
-def process_directory(directory_path, export_datasets, write_csv_flag):
+def process_directory(directory_path, export_datasets, write_csv_flag, parse_config):
     omop_dataset_dict = {} # keyed by dataset_names (legacy domain names)
    
     only_files = [f for f in os.listdir(directory_path) if os.path.isfile(os.path.join(directory_path, f))]
     for file in (only_files):
         if file.endswith(".xml"):
-            new_data_dict = LD.process_file(os.path.join(directory_path, file), write_csv_flag)
+            new_data_dict = LD.process_file(os.path.join(directory_path, file), write_csv_flag, parse_config)
             for key in new_data_dict:
                 if key in omop_dataset_dict and omop_dataset_dict[key] is not None:
                     if new_data_dict[key] is  not None:
@@ -63,7 +68,9 @@ if True:
             print(f" would process {file}")
 print("2================")
 #omop_dataset_dict = LD.process_directory(dir, False, True)
-omop_dataset_dict = process_directory(dir, False, True)
+meta_dict = get_meta_dict()
+for k in meta_dict:
+    omop_dataset_dict = process_directory(dir, False, True, k)
 print("3================")
 
 print(ddl.config_to_domain_name_dict)
@@ -81,7 +88,7 @@ for (cfg_name, dataset) in omop_dataset_dict.items():
             sdf = None
             try:
                 sdf = spark.createDataFrame(dataset, 
-                    spark_dataframe_column_types.spark_dataframe_column_types[omop_tablename])
+                    domain_dataframe_column_types.domain_dataframe_column_types[omop_tablename])
             except Exception as e:
                 print(f"   ERROR converting parquet/{omop_domain}_parquet")
                 print(f"   {e}")

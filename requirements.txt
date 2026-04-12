@@ -1,2 +1,13 @@
-ccda-to-omop==0.0.8
+ccda-to-omop==2.0.1
+lxml==6.0.2
+numpy==2.4.4
+pandas==3.0.2
+python-dateutil==2.9.0.post0
+pytz==2026.1.post1
+pyspark==4.1.1
+pytest-cov==7.1.0
+six==1.17.0
+typeguard==4.5.1
+typing_extensions==4.15.0
+
 
