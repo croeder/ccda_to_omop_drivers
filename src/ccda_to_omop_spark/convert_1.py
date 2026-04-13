@@ -143,7 +143,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-dir="/Users/croeder/git/CCDA-data/resources"
+#dir="/Users/croeder/git/CCDA-data/resources"
+
+dir="/Users/croeder/git/CCDA/tislab-clad/CCDA_OMOP_Conversion_Package/resources"
 
 home=pathlib.Path(__file__).parent.parent.parent.resolve()
 codemap_dict = create_codemap_dict_from_csv(f"{home}/resources/map.csv")
