@@ -23,8 +23,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/.." && pwd)"
 PKG_ROOT="$REPO_ROOT/CCDA_OMOP_Conversion_Package"
 CCDA_DATA_DIR="$REPO_ROOT/CCDA-data"
-NFS_INPUT="/srv/nfs/input"    # pi4 NFS share — visible to all workers
-NFS_OUTPUT="/srv/nfs/output"  # pi4 NFS share — consolidated parquet output
+NFS_INPUT="/mnt/nfs/input"    # NFS share — consistent path on all workers
+NFS_OUTPUT="/mnt/nfs/output"  # NFS share — consolidated parquet output on all workers
 SPARK_HOME="${SPARK_HOME:-/opt/spark/current}"
 SPARK_MASTER_HOST="${SPARK_MASTER_HOST:-10.0.1.175}"
 SPARK_MASTER="spark://${SPARK_MASTER_HOST}:7077"
@@ -39,8 +39,8 @@ PYSPARK_DRIVER_PYTHON_BIN="${PYSPARK_DRIVER_PYTHON_BIN:-/Users/croeder/homebrew/
 #   --large    NFS input share (747 files), output to NFS output share
 #   positional arg overrides input dir; CCDA_OUTPUT_DIR overrides output
 if [[ "${1:-}" == "--large" ]]; then
-    export CCDA_INPUT_DIR="${CCDA_INPUT_DIR:-$NFS_INPUT}"
-    export CCDA_OUTPUT_DIR="${CCDA_OUTPUT_DIR:-$NFS_OUTPUT}"
+    export CCDA_INPUT_DIR="${CCDA_INPUT_DIR:-$CCDA_DATA_DIR/xml_load_test}"  # driver reads locally
+    export CCDA_OUTPUT_DIR="${CCDA_OUTPUT_DIR:-$NFS_OUTPUT}"                 # workers write to NFS
     shift
 else
     export CCDA_INPUT_DIR="${1:-${CCDA_INPUT_DIR:-$PKG_ROOT/resources}}"
@@ -114,9 +114,16 @@ if [[ "$err_count" -gt 0 ]]; then
 fi
 
 echo ""
-echo "Parquet output per worker:"
-for host in "${WORKER_HOSTS[@]}"; do
-    count=$(ssh -o StrictHostKeyChecking=no "${SSH_USER}@${host}" \
+echo "Parquet output:"
+# If output is NFS, count once from the server; otherwise count per worker
+if [[ "$CCDA_OUTPUT_DIR" == /mnt/nfs/* ]]; then
+    count=$(ssh -o StrictHostKeyChecking=no "${SSH_USER}@10.0.1.201" \
         "find '$CCDA_OUTPUT_DIR' -name '*.parquet' 2>/dev/null | wc -l" 2>/dev/null || echo "?")
-    echo "  $host: $count files in $CCDA_OUTPUT_DIR"
-done
+    echo "  NFS ($CCDA_OUTPUT_DIR): $count files"
+else
+    for host in "${WORKER_HOSTS[@]}"; do
+        count=$(ssh -o StrictHostKeyChecking=no "${SSH_USER}@${host}" \
+            "find '$CCDA_OUTPUT_DIR' -name '*.parquet' 2>/dev/null | wc -l" 2>/dev/null || echo "?")
+        echo "  $host: $count files in $CCDA_OUTPUT_DIR"
+    done
+fi
