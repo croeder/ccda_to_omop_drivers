@@ -2,9 +2,10 @@
 # run_cluster.sh — start Spark cluster and run CCDA→OMOP conversion on Pi workers.
 #
 # Usage:
-#   ./run_cluster.sh [input_dir]
+#   ./run_cluster.sh              # small test set (CCDA_OMOP_Conversion_Package/resources)
+#   ./run_cluster.sh --large      # large dataset (CCDA-data/xml_load_test, 747 files)
+#   ./run_cluster.sh /path/to/dir # explicit input directory
 #
-#   input_dir defaults to CCDA_OMOP_Conversion_Package/resources.
 #   Override with env vars:
 #     CCDA_INPUT_DIR   — directory of CCDA XML files (read by driver)
 #     CCDA_OUTPUT_DIR  — output path on each worker node (default: /tmp/parquet2)
@@ -21,6 +22,9 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/.." && pwd)"
 PKG_ROOT="$REPO_ROOT/CCDA_OMOP_Conversion_Package"
+CCDA_DATA_DIR="$REPO_ROOT/CCDA-data"
+NFS_INPUT="/srv/nfs/input"    # pi4 NFS share — visible to all workers
+NFS_OUTPUT="/srv/nfs/output"  # pi4 NFS share — consolidated parquet output
 SPARK_HOME="${SPARK_HOME:-/opt/spark/current}"
 SPARK_MASTER_HOST="${SPARK_MASTER_HOST:-10.0.1.175}"
 SPARK_MASTER="spark://${SPARK_MASTER_HOST}:7077"
@@ -30,7 +34,18 @@ SSH_USER="${SSH_USER:-croeder}"
 PYSPARK_PYTHON_BIN="${PYSPARK_PYTHON_BIN:-python3.13}"
 PYSPARK_DRIVER_PYTHON_BIN="${PYSPARK_DRIVER_PYTHON_BIN:-/Users/croeder/homebrew/bin/python3.13}"
 
-export CCDA_INPUT_DIR="${1:-${CCDA_INPUT_DIR:-$PKG_ROOT/resources}}"
+# Input/output dataset selection:
+#   (default)  small test set from the conversion package, output to /tmp/parquet2
+#   --large    NFS input share (747 files), output to NFS output share
+#   positional arg overrides input dir; CCDA_OUTPUT_DIR overrides output
+if [[ "${1:-}" == "--large" ]]; then
+    export CCDA_INPUT_DIR="${CCDA_INPUT_DIR:-$NFS_INPUT}"
+    export CCDA_OUTPUT_DIR="${CCDA_OUTPUT_DIR:-$NFS_OUTPUT}"
+    shift
+else
+    export CCDA_INPUT_DIR="${1:-${CCDA_INPUT_DIR:-$PKG_ROOT/resources}}"
+    [[ $# -gt 0 ]] && shift || true
+fi
 export CCDA_OUTPUT_DIR="${CCDA_OUTPUT_DIR:-/tmp/parquet2}"
 export CCDA_CODEMAP="${CCDA_CODEMAP:-$PKG_ROOT/resources/map.csv}"
 
