@@ -133,8 +133,8 @@ def main():
     # ---- CONSOLIDATION ----
     # Each domain subdirectory contains one parquet file per input XML file.
     # Read each subdirectory as a single Spark DataFrame and write it out as
-    # one combined parquet file at OUTPUT_DIR/<table_name>.parquet, then
-    # remove the per-file subdirectory.
+    # a combined parquet directory at OUTPUT_DIR/<table_name>.parquet using
+    # Spark's default partitioning, then remove the per-file subdirectory.
     print("\nConsolidating per-file parquet files by OMOP domain...")
     for table_name in os.listdir(OUTPUT_DIR):
         table_dir = os.path.join(OUTPUT_DIR, table_name)
@@ -143,7 +143,7 @@ def main():
         out_path = os.path.join(OUTPUT_DIR, f"{table_name}.parquet")
         try:
             df = spark.read.parquet(table_dir)
-            df.coalesce(1).write.mode("overwrite").parquet(out_path)
+            df.write.mode("overwrite").parquet(out_path)
             shutil.rmtree(table_dir)
             print(f"  consolidated {table_name} ({df.count()} rows) -> {out_path}")
         except Exception as e:
