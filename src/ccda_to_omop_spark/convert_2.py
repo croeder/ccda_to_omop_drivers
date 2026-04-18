@@ -7,6 +7,10 @@ workers never need to reach back to the driver's filesystem. map.csv and
 type_util.py are shipped to workers via sc.addFile / sc.addPyFile.
 Each worker writes its own parquet files locally.
 
+After all workers finish, the driver consolidates the per-file parquet files
+in each OMOP domain subdirectory into a single combined parquet file at
+OUTPUT_DIR/<table_name>.parquet, then removes the per-file subdirectories.
+
 NOTE: ccda_to_omop cannot be shipped as a zip (sc.addPyFile) because
 metadata/__init__.py uses os.listdir() to discover config files, which
 does not work inside a zip archive. The package must be pip-installed
@@ -15,6 +19,7 @@ on every worker node before running:
 """
 
 import os
+import shutil
 import pathlib
 from pyspark.sql import SparkSession
 
@@ -124,6 +129,25 @@ def main():
 
     for r in all_results:
         print(r)
+
+    # ---- CONSOLIDATION ----
+    # Each domain subdirectory contains one parquet file per input XML file.
+    # Read each subdirectory as a single Spark DataFrame and write it out as
+    # one combined parquet file at OUTPUT_DIR/<table_name>.parquet, then
+    # remove the per-file subdirectory.
+    print("\nConsolidating per-file parquet files by OMOP domain...")
+    for table_name in os.listdir(OUTPUT_DIR):
+        table_dir = os.path.join(OUTPUT_DIR, table_name)
+        if not os.path.isdir(table_dir):
+            continue
+        out_path = os.path.join(OUTPUT_DIR, f"{table_name}.parquet")
+        try:
+            df = spark.read.parquet(table_dir)
+            df.coalesce(1).write.mode("overwrite").parquet(out_path)
+            shutil.rmtree(table_dir)
+            print(f"  consolidated {table_name} ({df.count()} rows) -> {out_path}")
+        except Exception as e:
+            print(f"  ERROR consolidating {table_name}: {e}")
 
     spark.stop()
 
